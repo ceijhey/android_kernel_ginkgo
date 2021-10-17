@@ -5,7 +5,7 @@
 
 SECONDS=0 # builtin bash timer
 ZIPNAME="redmi-ginkgo-$(date '+%Y%m%d-%H%M').zip"
-TC_DIR="$HOME/tc/azure-clang"
+TC_DIR="$HOME/tc/azure"
 AK3_DIR="$HOME/android/AnyKernel3"
 DEFCONFIG="vendor/ginkgo-perf_defconfig"
 
@@ -36,7 +36,7 @@ mkdir -p out
 make O=out ARCH=arm64 $DEFCONFIG
 
 echo -e "\nStarting compilation...\n"
-make -j$(nproc --all) O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar AS=llvm-as NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz-dtb dtbo.img
+make -j4 O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar AS=llvm-as NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- dtbo.img Image.gz
 
 if [ -f "out/arch/arm64/boot/Image.gz-dtb" ] && [ -f "out/arch/arm64/boot/dtbo.img" ]; then
 echo -e "\nKernel compiled succesfully! Zipping up...\n"
@@ -46,7 +46,7 @@ elif ! git clone -q https://github.com/ghostrider-reborn/AnyKernel3; then
 echo -e "\nAnyKernel3 repo not found locally and cloning failed! Aborting..."
 exit 1
 fi
-cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3
+cp out/arch/arm64/boot/Image.gz AnyKernel3
 cp out/arch/arm64/boot/dtbo.img AnyKernel3
 rm -f *zip
 cd AnyKernel3
