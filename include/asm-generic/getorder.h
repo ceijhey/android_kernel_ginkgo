@@ -7,6 +7,24 @@
 #include <linux/compiler.h>
 #include <linux/log2.h>
 
+/*
+ * Runtime evaluation of get_order()
+ */
+static inline __attribute_const__
+int __get_order(unsigned long size)
+{
+	int order;
+
+	size--;
+	size >>= PAGE_SHIFT;
+#if BITS_PER_LONG == 32
+	order = fls(size);
+#else
+	order = fls64(size);
+#endif
+	return order;
+}
+
 /**
  * get_order - Determine the allocation order of a memory size
  * @size: The size for which to get the order
@@ -25,6 +43,9 @@
  * to hold an object of the specified size.
  *
  * The result is undefined if the size is 0.
+ *
+ * This function may be used to initialise variables with compile time
+ * evaluations of constants.
  */
 static inline __attribute_const__ int get_order(unsigned long size)
 {

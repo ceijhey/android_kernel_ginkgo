@@ -240,6 +240,7 @@ do {									\
 			break;					\
 		cpu_relax();					\
 	}							\
+	smp_acquire__after_ctrl_dep();				\
 	VAL;							\
 })
 #endif
