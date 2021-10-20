@@ -51,6 +51,8 @@
 #define FCC_VOTER			"FCC_VOTER"
 #define MAIN_FCC_VOTER			"MAIN_FCC_VOTER"
 #define PD_VOTER			"PD_VOTER"
+#undef pr_debug
+#define pr_debug pr_err
 
 struct pl_data {
 	int			pl_mode;
@@ -125,7 +127,7 @@ enum {
 	FORCE_INOV_DISABLE_BIT	= BIT(1),
 };
 
-static int debug_mask;
+static int debug_mask = 0xfff;
 module_param_named(debug_mask, debug_mask, int, 0600);
 
 #define pl_dbg(chip, reason, fmt, ...)				\

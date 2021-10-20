@@ -2,7 +2,8 @@
  * drivers/staging/android/ion/ion.h
  *
  * Copyright (C) 2011 Google, Inc.
- * Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
+ * Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -151,14 +152,9 @@ void ion_buffer_destroy(struct ion_buffer *buffer);
 struct ion_device {
 	struct miscdevice dev;
 	struct plist_head heaps;
-	struct ion_heap_data *heap_data;
-	u32 heap_count;
-};
-
-/* refer to include/linux/pm.h */
-struct ion_pm_ops {
-	int (*freeze)(struct ion_heap *heap);
-	int (*restore)(struct ion_heap *heap);
+	struct dentry *debug_root;
+	struct dentry *heaps_debug_root;
+	int heap_cnt;
 };
 
 /**
@@ -225,6 +221,9 @@ struct ion_heap_ops {
  * @task:		task struct of deferred free thread
  * @debug_show:		called when heap debug file is read to add any
  *			heap specific debug info to output
+ * @num_of_buffers	the number of currently allocated buffers
+ * @num_of_alloc_bytes	the number of allocated bytes
+ * @alloc_bytes_wm	the number of allocated bytes watermark
  *
  * Represents a pool of memory from which buffers can be made.  In some
  * systems the only heap is regular system memory allocated via vmalloc.
@@ -240,7 +239,23 @@ struct ion_heap {
 	const char *name;
 	struct shrinker shrinker;
 	void *priv;
-	struct workqueue_struct *wq;
+	struct list_head free_list;
+	size_t free_list_size;
+	/* Protect the free list */
+	spinlock_t free_lock;
+	wait_queue_head_t waitqueue;
+	struct task_struct *task;
+	u64 num_of_buffers;
+	u64 num_of_alloc_bytes;
+	u64 alloc_bytes_wm;
+
+	/* protect heap statistics */
+	spinlock_t stat_lock;
+
+	atomic_long_t total_allocated;
+
+	int (*debug_show)(struct ion_heap *heap, struct seq_file *, void *);
+>>>>>>> theirs
 };
 
 /**

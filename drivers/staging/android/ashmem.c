@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
+ *
  * Robert Love <rlove@google.com>
  * Copyright (C) 2021 Sultan Alsawaf <sultan@kerneltoast.com>.
  */
@@ -146,6 +148,87 @@ static int ashmem_vmfile_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	/* do not allow to mmap ashmem backing shmem file directly */
 	return -EPERM;
+}
+
+static unsigned long
+ashmem_vmfile_get_unmapped_area(struct file *file, unsigned long addr,
+				unsigned long len, unsigned long pgoff,
+				unsigned long flags)
+{
+	return current->mm->get_unmapped_area(file, addr, len, pgoff, flags);
+}
+
+static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	static struct file_operations vmfile_fops;
+	struct ashmem_area *asma = file->private_data;
+	int ret = 0;
+
+	mutex_lock(&ashmem_mutex);
+
+	/* user needs to SET_SIZE before mapping */
+	if (unlikely(!asma->size)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/* requested mapping size larger than object size */
+	if (vma->vm_end - vma->vm_start > PAGE_ALIGN(asma->size)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/* requested protection bits must match our allowed protection mask */
+	if (unlikely((vma->vm_flags & ~calc_vm_prot_bits(asma->prot_mask, 0)) &
+		     calc_vm_prot_bits(PROT_MASK, 0))) {
+		ret = -EPERM;
+		goto out;
+	}
+	vma->vm_flags &= ~calc_vm_may_flags(~asma->prot_mask);
+
+	if (!asma->file) {
+		char *name = ASHMEM_NAME_DEF;
+		struct file *vmfile;
+
+		if (asma->name[ASHMEM_NAME_PREFIX_LEN] != '\0')
+			name = asma->name;
+
+		/* ... and allocate the backing shmem file */
+		vmfile = shmem_file_setup(name, asma->size, vma->vm_flags);
+		if (IS_ERR(vmfile)) {
+			ret = PTR_ERR(vmfile);
+			goto out;
+		}
+		vmfile->f_mode |= FMODE_LSEEK;
+		asma->file = vmfile;
+		/*
+		 * override mmap operation of the vmfile so that it can't be
+		 * remapped which would lead to creation of a new vma with no
+		 * asma permission checks. Have to override get_unmapped_area
+		 * as well to prevent VM_BUG_ON check for f_ops modification.
+		 */
+		if (!vmfile_fops.mmap) {
+			vmfile_fops = *vmfile->f_op;
+			vmfile_fops.mmap = ashmem_vmfile_mmap;
+			vmfile_fops.get_unmapped_area =
+					ashmem_vmfile_get_unmapped_area;
+		}
+		vmfile->f_op = &vmfile_fops;
+	}
+	get_file(asma->file);
+
+	if (vma->vm_flags & VM_SHARED)
+		shmem_set_file(vma, asma->file);
+	else {
+		if (vma->vm_file)
+			fput(vma->vm_file);
+		vma->vm_file = asma->file;
+	}
+
+out:
+	mutex_unlock(&ashmem_mutex);
+	return ret;
+>>>>>>> theirs
 }
 
 static unsigned long

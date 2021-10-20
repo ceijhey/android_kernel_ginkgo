@@ -42,10 +42,12 @@
 #include "qg-soc.h"
 #include "qg-battery-profile.h"
 #include "qg-defs.h"
+#undef pr_debug
+#define pr_debug pr_err
 
 u8 set_cycle_flag = 0;
 
-static int qg_debug_mask;
+static int qg_debug_mask = 0xfff;
 module_param_named(
 	debug_mask, qg_debug_mask, int, 0600
 );

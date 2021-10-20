@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2015,2017, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -42,10 +43,8 @@ enum input_boost_type {
 
 static DEFINE_PER_CPU(struct cpu_sync, sync_info);
 
-static struct kthread_work input_boost_work;
-
-static struct kthread_work powerkey_input_boost_work;
-
+static struct work_struct input_boost_work;
+static struct work_struct powerkey_input_boost_work;
 static bool input_boost_enabled;
 
 static unsigned int input_boost_ms = 40;
@@ -64,14 +63,7 @@ static bool sched_boost_active;
 
 static struct delayed_work input_boost_rem;
 static u64 last_input_time;
-
-static struct kthread_worker cpu_boost_worker;
-static struct task_struct *cpu_boost_worker_thread;
-
-static struct kthread_worker powerkey_cpu_boost_worker;
-static struct task_struct *powerkey_cpu_boost_worker_thread;
-
-#define MIN_INPUT_INTERVAL (100 * USEC_PER_MSEC)
+#define MIN_INPUT_INTERVAL (150 * USEC_PER_MSEC)
 #define MAX_NAME_LENGTH 64
 
 static int set_input_boost_freq(const char *buf, const struct kernel_param *kp)
@@ -95,7 +87,7 @@ static int set_input_boost_freq(const char *buf, const struct kernel_param *kp)
 	if (!ntokens) {
 		if (sscanf(buf, "%u\n", &val) != 1)
 			return -EINVAL;
-		for_each_possible_cpu(i) {
+		for_each_possible_cpu(i){
 			if (type == default_input_boost)
 				per_cpu(sync_info, i).input_boost_freq = val;
 			else if (type == powerkey_input_boost)
@@ -126,7 +118,7 @@ static int set_input_boost_freq(const char *buf, const struct kernel_param *kp)
 check_enable:
 	for_each_possible_cpu(i) {
 		if (per_cpu(sync_info, i).input_boost_freq
-			|| per_cpu(sync_info, i).powerkey_input_boost_freq) {
+					|| per_cpu(sync_info, i).powerkey_input_boost_freq) {
 			enabled = true;
 			break;
 		}
@@ -152,7 +144,7 @@ static int get_input_boost_freq(char *buf, const struct kernel_param *kp)
 		s = &per_cpu(sync_info, cpu);
 		if (type == default_input_boost)
 			boost_freq = s->input_boost_freq;
-		else if(type == powerkey_input_boost)
+		else if (type == powerkey_input_boost)
 			boost_freq = s->powerkey_input_boost_freq;
 		cnt += snprintf(buf + cnt, PAGE_SIZE - cnt,
 				"%d:%u ", cpu, boost_freq);
@@ -166,6 +158,8 @@ static const struct kernel_param_ops param_ops_input_boost_freq = {
 	.get = get_input_boost_freq,
 };
 module_param_cb(input_boost_freq, &param_ops_input_boost_freq, NULL, 0644);
+module_param_cb(powerkey_input_boost_freq, &param_ops_input_boost_freq,
+			NULL, 0644);
 
 module_param_cb(powerkey_input_boost_freq, &param_ops_input_boost_freq, NULL, 0644);
 
@@ -318,6 +312,41 @@ static void do_powerkey_input_boost(struct kthread_work *work)
 				msecs_to_jiffies(powerkey_input_boost_ms));
 }
 
+static void do_powerkey_input_boost(struct work_struct *work)
+{
+	unsigned int i, ret;
+	struct cpu_sync *i_sync_info;
+
+	cancel_delayed_work_sync(&input_boost_rem);
+	if (sched_boost_active) {
+		sched_set_boost(0);
+		sched_boost_active = false;
+	}
+
+	/* Set the powerkey_input_boost_min for all CPUs in the system */
+	pr_debug("Setting powerkey input boost min for all CPUs\n");
+	for_each_possible_cpu(i) {
+		i_sync_info = &per_cpu(sync_info, i);
+		i_sync_info->input_boost_min =
+			i_sync_info->powerkey_input_boost_freq;
+	}
+
+	/* Update policies for all online CPUs */
+	update_policy_online();
+
+	/* Enable scheduler boost to migrate tasks to big cluster */
+	if (sched_boost_on_powerkey_input) {
+		ret = sched_set_boost(1);
+		if (ret)
+			pr_err("cpu-boost: HMP boost enable failed\n");
+		else
+			sched_boost_active = true;
+	}
+
+	queue_delayed_work(cpu_boost_wq, &input_boost_rem,
+				msecs_to_jiffies(powerkey_input_boost_ms));
+}
+
 static void cpuboost_input_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
@@ -333,11 +362,10 @@ static void cpuboost_input_event(struct input_handle *handle,
 	if (queuing_blocked(&cpu_boost_worker, &input_boost_work))
 		return;
 
-	if ((type == EV_KEY && code == KEY_POWER) ||
-		(type == EV_KEY && code == KEY_WAKEUP)) {
-		kthread_queue_work(&cpu_boost_worker, &powerkey_input_boost_work);
-	} else
-		kthread_queue_work(&cpu_boost_worker, &input_boost_work);
+	if (type == EV_KEY && code == KEY_POWER)
+		queue_work(cpu_boost_wq, &powerkey_input_boost_work);
+	else
+		queue_work(cpu_boost_wq, &input_boost_work);
 
 	last_input_time = ktime_to_us(ktime_get());
 }
@@ -458,8 +486,8 @@ static int cpu_boost_init(void)
 	wake_up_process(cpu_boost_worker_thread);
 	wake_up_process(powerkey_cpu_boost_worker_thread);
 
-	kthread_init_work(&input_boost_work, do_input_boost);
-	kthread_init_work(&powerkey_input_boost_work, do_powerkey_input_boost);
+	INIT_WORK(&input_boost_work, do_input_boost);
+        INIT_WORK(&powerkey_input_boost_work, do_powerkey_input_boost);
 	INIT_DELAYED_WORK(&input_boost_rem, do_input_boost_rem);
 
 	for_each_possible_cpu(cpu) {

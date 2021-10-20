@@ -37,9 +37,8 @@
 #define DETACH_ATTACH_MAX_INTERVAL ((unsigned long)330)
 #endif
 
-#ifdef CONFIG_FORCE_FAST_CHARGE
-#include <linux/fastchg.h>
-#endif
+#undef pr_debug
+#define pr_debug pr_err
 
 #define smblib_err(chg, fmt, ...)		\
 	pr_err("%s: %s: " fmt, chg->name,	\
@@ -1107,7 +1106,7 @@ static const struct apsd_result *smblib_update_usb_type(struct smb_charger *chg)
 			chg->usb_psy_desc.type = apsd_result->pst;
 	}
 
-	smblib_dbg(chg, PR_MISC, "APSD=%s PD=%d\n",apsd_result->name, chg->pd_active);
+	smblib_err(chg,"APSD=%s PD=%d\n",apsd_result->name, chg->pd_active);
 	return apsd_result;
 }
 
@@ -4250,7 +4249,7 @@ static int smblib_handle_usb_current(struct smb_charger *chg,
 		/* if flash is active force 500mA */
 		if (usb_current < SDP_CURRENT_UA)
 			usb_current = SDP_CURRENT_UA;
-		smblib_dbg(chg, PR_MISC, "sunxing set SDP ICL =%d\n", usb_current);
+     smblib_err(chg,"sunxing set SDP ICL =%d\n",usb_current);
 		rc = vote(chg->usb_icl_votable, USB_PSY_VOTER, true,
 							usb_current);
 		if (rc < 0) {
@@ -5373,7 +5372,7 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 		vote(chg->awake_votable, DETACH_DETECT_VOTER, false, 0);
 	#ifdef NS_QC3_CHG_WA
 		attach_time = jiffies;
-		smblib_dbg(chg, PR_MISC, "attach_time = %lu\n", attach_time);
+		smblib_err(chg, "attach_time = %lu\n", attach_time);
 		if (need_confirm && attach_time - detach_time < DETACH_ATTACH_MAX_INTERVAL) {
 			rc = smblib_masked_write(chg, USBIN_OPTIONS_1_CFG_REG, HVDCP_EN_BIT, 0);
 			if (rc < 0)
@@ -5418,7 +5417,7 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 			}
 			if (chg->collapsed) {
 			detach_time = jiffies;
-			smblib_dbg(chg, PR_MISC, "detached after collapse --> time = %lu, collapse-time = %lu, last_attach_time = %lu\n",
+			smblib_err(chg, "detached after collapse --> time = %lu, collapse-time = %lu, last_attach_time = %lu\n",
 			detach_time, chg->recent_collapse_time, attach_time);
 			if (detach_time - chg->recent_collapse_time < COLLAPSE_DETACH_MAX_INTERVAL &&
 				detach_time - attach_time < ATTACH_DETACH_MAX_INTERVAL)

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 ST-Ericsson SA.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (C) 2009 Motorola, Inc.
  *
  * License Terms: GNU General Public License v2
@@ -24,6 +25,7 @@
 #include "ktd_reg_05.h"
 #include "ti_reg_22.h"
 #include "ti_reg_23.h"
+
 
 #define SGM_NAME "ktd3136"
 
@@ -282,11 +284,11 @@ void ktd3137_brightness_set_workfunc(struct ktd3137_chip *chip, int brightness)
 }
 int sgm_brightness_set(uint16_t brightness)
 {
-	pr_debug("[brightness]%s brightness = %d\n", __func__, brightness);
+	pr_info("[brightness]%s brightness = %d\n", __func__, brightness);
 	if(g_backlight_ic == 1)
 		ktd3137_brightness_set_workfunc(bkl_chip, brightness);
 	else
-		lm3697_brightness_set(brightness);
+		lm3697_brightness_set(brightness);	
 	return 0;
 }
 EXPORT_SYMBOL_GPL(sgm_brightness_set);

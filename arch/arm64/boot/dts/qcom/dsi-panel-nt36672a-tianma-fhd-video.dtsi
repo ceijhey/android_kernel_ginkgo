@@ -1,5 +1,5 @@
 /* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -234,7 +234,7 @@
 				15 00 00 00 00 00 02 27 24
 				15 00 00 00 00 00 02 28 28
 				//STILL mode
-				15 00 00 00 00 00 02 2A 1D
+				15 00 00 00 00 00 02 2A 3F
 				//Still_PWM DUTY
 				15 00 00 00 00 00 02 45 E4
 				15 00 00 00 00 00 02 46 E4

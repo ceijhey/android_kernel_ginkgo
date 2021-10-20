@@ -3,6 +3,7 @@
 # Compile script for QuicksilveR kernel
 # Copyright (C) 2020-2021 Adithya R.
 
+HOME=~
 SECONDS=0 # builtin bash timer
 ZIPNAME="redmi-ginkgo-$(date '+%Y%m%d-%H%M').zip"
 TC_DIR="$HOME/tc/azure"

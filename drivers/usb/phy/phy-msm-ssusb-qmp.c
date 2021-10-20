@@ -28,6 +28,10 @@
 #include <linux/reset.h>
 #include <linux/hrtimer.h>
 #include <soc/qcom/socinfo.h>
+#undef dev_dbg 
+#define dev_dbg dev_err 
+#undef pr_debug 
+#define pr_debug pr_info 
 
 enum core_ldo_levels {
 	CORE_LEVEL_NONE = 0,

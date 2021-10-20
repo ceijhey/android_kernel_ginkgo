@@ -41,6 +41,7 @@
 #include <linux/pm_qos.h>
 #include <linux/cpufreq.h>
 #include <linux/mdss_io_util.h>
+//#include <linux/wakelock.h>
 #include <linux/proc_fs.h>
 #include "gf_spi.h"
 #include <linux/unistd.h>
@@ -78,26 +79,46 @@ static int SPIDEV_MAJOR;
 static DECLARE_BITMAP(minors, N_SPI_MINORS);
 static LIST_HEAD(device_list);
 static DEFINE_MUTEX(device_list_lock);
-static struct wakeup_source fp_ws;
+//static struct wake_lock fp_wakelock;
+static struct wakeup_source fp_ws;//for kernel 4.9
 static struct gf_dev gf;
 
 extern int fpsensor;
 static struct proc_dir_entry *proc_entry;
 
+#if 0
+static struct gf_key_map maps[] = {
+	{ EV_KEY, GF_KEY_INPUT_HOME },
+	{ EV_KEY, GF_KEY_INPUT_MENU },
+	{ EV_KEY, GF_KEY_INPUT_BACK },
+	{ EV_KEY, GF_KEY_INPUT_POWER },
+#if defined(SUPPORT_NAV_EVENT)
+	{ EV_KEY, GF_NAV_INPUT_UP },
+	{ EV_KEY, GF_NAV_INPUT_DOWN },
+	{ EV_KEY, GF_NAV_INPUT_RIGHT },
+	{ EV_KEY, GF_NAV_INPUT_LEFT },
+	{ EV_KEY, GF_KEY_INPUT_CAMERA },
+	{ EV_KEY, GF_NAV_INPUT_CLICK },
+	{ EV_KEY, GF_NAV_INPUT_DOUBLE_CLICK },
+	{ EV_KEY, GF_NAV_INPUT_LONG_PRESS },
+	{ EV_KEY, GF_NAV_INPUT_HEAVY },
+#endif
+};
+#endif
 struct gf_key_map maps[] = {
-	{ EV_KEY, KEY_HOME },
-	{ EV_KEY, KEY_MENU },
-	{ EV_KEY, KEY_BACK },
-	{ EV_KEY, KEY_POWER },
-	{ EV_KEY, KEY_UP },
-	{ EV_KEY, KEY_DOWN },
-	{ EV_KEY, KEY_RIGHT },
-	{ EV_KEY, KEY_LEFT },
-	{ EV_KEY, KEY_CAMERA },
-	{ EV_KEY, KEY_F9 },
-	{ EV_KEY, KEY_F19 },
-	{ EV_KEY, KEY_ENTER},
-	{ EV_KEY, KEY_KPENTER },
+        { EV_KEY, KEY_HOME },
+        { EV_KEY, KEY_MENU },
+        { EV_KEY, KEY_BACK },
+        { EV_KEY, KEY_POWER },
+        { EV_KEY, KEY_UP },
+        { EV_KEY, KEY_DOWN },
+        { EV_KEY, KEY_RIGHT },
+        { EV_KEY, KEY_LEFT },
+        { EV_KEY, KEY_CAMERA },
+        { EV_KEY, KEY_F9 },
+        { EV_KEY, KEY_F19 },
+        { EV_KEY, KEY_ENTER},
+        { EV_KEY, KEY_KPENTER },
 
 };
 
@@ -329,7 +350,8 @@ static irqreturn_t gf_irq(int irq, void *handle)
 #if defined(GF_NETLINK_ENABLE)
 	char msg = GF_NET_EVENT_IRQ;
 	struct gf_dev *gf_dev = &gf;
-	__pm_wakeup_event(&fp_ws, WAKELOCK_HOLD_TIME);
+	//wake_lock_timeout(&fp_wakelock, msecs_to_jiffies(WAKELOCK_HOLD_TIME));
+	__pm_wakeup_event(&fp_ws, WAKELOCK_HOLD_TIME);//for kernel 4.9
 	sendnlmsg(&msg);
 	if (gf_dev->device_available == 1) {
 		printk("%s:shedule_work\n",__func__);
@@ -352,7 +374,7 @@ static int irq_setup(struct gf_dev *gf_dev)
 
 	gf_dev->irq = gf_irq_num(gf_dev);
 	status = request_threaded_irq(gf_dev->irq, NULL, gf_irq,
-			IRQF_TRIGGER_RISING | IRQF_ONESHOT | IRQF_PERF_CRITICAL,
+			IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 			"gf", gf_dev);
 
 	if (status) {
@@ -515,6 +537,8 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	case GF_IOC_REMOVE:
 		pr_debug("%s GF_IOC_REMOVE\n", __func__);
+		//irq_cleanup(gf_dev);
+		//gf_cleanup(gf_dev);
 		break;
 
 	case GF_IOC_CHIP_INFO:
@@ -585,6 +609,7 @@ static int gf_open(struct inode *inode, struct file *filp)
 				if (status)
 					goto err_irq;
 			}
+			//gf_hw_reset(gf_dev, 3);//reserve for timing sequence
 			gf_disable_irq(gf_dev);
 		}
 	} else {
@@ -639,6 +664,7 @@ static int gf_release(struct inode *inode, struct file *filp)
 	if (!gf_dev->users) {
 
 		pr_info("disble_irq. irq = %d\n", gf_dev->irq);
+		//gf_disable_irq(gf_dev);
 		irq_cleanup(gf_dev);
 		gf_cleanup(gf_dev);
 		/*power off the sensor*/
@@ -810,7 +836,8 @@ static int gf_probe(struct platform_device *pdev)
 	gf_dev->notifier = goodix_noti_block;
 	msm_drm_register_client(&gf_dev->notifier);
 
-	wakeup_source_init(&fp_ws, "fp_ws");
+	//wake_lock_init(&fp_wakelock, WAKE_LOCK_SUSPEND, "fp_wakelock");
+	wakeup_source_init(&fp_ws, "fp_ws");//for kernel 4.9
 
 	proc_entry = proc_create(PROC_NAME, 0644, NULL, &proc_file_ops);
 	if (NULL == proc_entry) {
@@ -856,7 +883,8 @@ static int gf_remove(struct platform_device *pdev)
 {
 	struct gf_dev *gf_dev = &gf;
 
-	wakeup_source_trash(&fp_ws);
+	//wake_lock_destroy(&fp_wakelock);
+	wakeup_source_trash(&fp_ws);//for kernel 4.9
 	msm_drm_unregister_client(&gf_dev->notifier);
 	if (gf_dev->input)
 		input_unregister_device(gf_dev->input);
@@ -887,7 +915,6 @@ static struct platform_driver gf_driver = {
 		.name = GF_DEV_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = gx_match_table,
-		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 	.probe = gf_probe,
 	.remove = gf_remove,

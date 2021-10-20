@@ -1,4 +1,5 @@
 /* Copyright (c) 2016-2017, 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -65,30 +66,25 @@ _kgsl_get_pool_from_order(unsigned int order)
 
 /* Map the page into kernel and zero it out */
 static void
-_kgsl_pool_zero_page(struct page *p, unsigned int pool_order)
+_kgsl_pool_zero_page(struct page *p)
 {
-	int i;
+	void *addr = kmap_atomic(p);
+	memset(addr, 0, PAGE_SIZE);
+	dmac_flush_range(addr, addr + PAGE_SIZE);
+	kunmap_atomic(addr);
 
-	for (i = 0; i < (1 << pool_order); i++) {
-		struct page *page = nth_page(p, i);
-		void *addr = kmap_atomic(page);
-
-		memset(addr, 0, PAGE_SIZE);
-		dmac_flush_range(addr, addr + PAGE_SIZE);
-		kunmap_atomic(addr);
-	}
 }
 
 /* Add a page to specified pool */
 static void
 _kgsl_pool_add_page(struct kgsl_page_pool *pool, struct page *p)
 {
-	_kgsl_pool_zero_page(p, pool->pool_order);
-
-	llist_add((struct llist_node *)&p->lru, &pool->page_list);
-	atomic_inc(&pool->page_count);
-	mod_node_page_state(page_pgdat(p), NR_KERNEL_MISC_RECLAIMABLE,
-				(1 << pool->pool_order));
+	spin_lock(&pool->list_lock);
+	list_add_tail(&p->lru, &pool->page_list);
+	pool->page_count++;
+	spin_unlock(&pool->list_lock);
+	mod_node_page_state(page_pgdat(p), NR_INDIRECTLY_RECLAIMABLE_BYTES,
+				(PAGE_SIZE << pool->pool_order));
 }
 
 /* Returns a page from specified pool */
@@ -335,7 +331,6 @@ int kgsl_pool_alloc_page(int *page_size, struct page **pages,
 			} else
 				return -ENOMEM;
 		}
-		_kgsl_pool_zero_page(page, order);
 		goto done;
 	}
 
@@ -355,7 +350,6 @@ int kgsl_pool_alloc_page(int *page_size, struct page **pages,
 			page = alloc_pages(gfp_mask, order);
 			if (page == NULL)
 				return -ENOMEM;
-			_kgsl_pool_zero_page(page, order);
 			goto done;
 		}
 	}
@@ -385,13 +379,12 @@ int kgsl_pool_alloc_page(int *page_size, struct page **pages,
 			} else
 				return -ENOMEM;
 		}
-
-		_kgsl_pool_zero_page(page, order);
 	}
 
 done:
 	for (j = 0; j < (*page_size >> PAGE_SHIFT); j++) {
 		p = nth_page(page, j);
+		_kgsl_pool_zero_page(p);
 		pages[pcount] = p;
 		pcount++;
 	}

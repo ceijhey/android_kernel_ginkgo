@@ -1,4 +1,5 @@
 /* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -3786,7 +3787,7 @@ static int msm_isp_request_frame(struct vfe_device *vfe_dev,
 		vfe_dev->axi_data.src_info[frame_src].frame_id +
 		vfe_dev->axi_data.src_info[frame_src].sof_counter_step)) ||
 		((!vfe_dev->axi_data.src_info[frame_src].active))) {
-		pr_debug("%s:%d invalid frame id %d cur frame id %d pix %d\n",
+		trace_printk("%s:%d invalid frame id %d cur frame id %d pix %d\n",
 			__func__, __LINE__, frame_id,
 			vfe_dev->axi_data.src_info[frame_src].frame_id,
 			vfe_dev->axi_data.src_info[frame_src].active);
